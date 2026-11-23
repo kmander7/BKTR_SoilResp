@@ -1,0 +1,828 @@
+---
+title: "SEM_soil_respiration"
+author: "Madeleine"
+date: "2022-12-22"
+output: 
+  html_document:
+    code_folding: hide
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+    df_print: kable 
+editor_options: 
+  markdown: 
+    wrap: 72 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+options(tinytex.verbose = TRUE)
+options(scipen=999) 
+```
+
+Get libraries.
+
+```{r}
+###Libraries
+library(tidyverse)
+library(piecewiseSEM)
+library(semEff)
+library(lme4)
+library(nlme)
+library(performance)
+library(MuMIn)
+library(car)
+library(arm)
+library(DHARMa)  #simulate residuals
+library(ggiraphExtra) #visualize multiple regression
+library(mgcv)
+library(ggpubr)
+library(ggsci)
+library(DiagrammeR) #for making SEM plot
+library(ggplot2)
+library(ggpubr) # correlations
+library(GGally)
+
+```
+
+#Read in the dataset with the soil PCA axes.
+
+```{r}
+soilresp<-read.csv("data_with_pca_soilresp.csv")
+
+soilresp <-  soilresp %>%
+  rename(Elevation = Altitude, EM_relabund = EMabun_BA) %>%
+  mutate(EM_relabund = EM_relabund * 100)
+View(soilresp)
+```
+
+Check the variables for normality beforehand. Annual Flux:
+
+```{r}
+af1<-ggplot(soilresp)+
+  geom_density(aes(x=AnnualFlux))+
+  theme_minimal()
+af2<-ggqqplot(soilresp, x = "AnnualFlux")
+ggarrange(af1, af2, ncol = 2, nrow = 1)
+```
+
+## Density plots Distribution of data for key variables
+
+Soil PCA1
+
+```{r}
+pca11<-ggplot(soilresp)+
+  geom_density(aes(x=soilPCA1))+
+  theme_minimal()
+pca12<-ggqqplot(soilresp, x = "soilPCA1")
+ggarrange(pca11, pca12, ncol = 2, nrow = 1)
+```
+
+Soil PCA2
+
+```{r}
+pca21<-ggplot(soilresp)+
+  geom_density(aes(x=soilPCA2))+
+  theme_minimal()
+pca22<-ggqqplot(soilresp, x = "soilPCA2")
+ggarrange(pca21, pca22, ncol = 2, nrow = 1)
+```
+
+Soil PCA3
+
+```{r}
+pca31<-ggplot(soilresp)+
+  geom_density(aes(x=soilPCA3))+
+  theme_minimal()
+pca32<-ggqqplot(soilresp, x = "soilPCA3")
+ggarrange(pca31, pca32, ncol = 2, nrow = 1)
+```
+
+Soil Moisture
+
+```{r}
+sm1<-ggplot(soilresp)+
+  geom_density(aes(x=SoilMoisture))+
+  theme_minimal()
+sm2<-ggqqplot(soilresp, x = "SoilMoisture")
+ggarrange(sm1, sm2, ncol = 2, nrow = 1)
+```
+
+Temperature
+
+```{r}
+tt1<-ggplot(soilresp)+
+  geom_density(aes(x=Temperature))+
+  theme_minimal()
+tt2<-ggqqplot(soilresp, x = "Temperature")
+ggarrange(tt1, tt2, ncol = 2, nrow = 1)
+```
+
+Fine Roots
+
+```{r}
+fr1<-ggplot(soilresp)+
+  geom_density(aes(x=FineRoots))+
+  theme_minimal()
+fr2<-ggqqplot(soilresp, x = "FineRoots")
+ggarrange(fr1, fr2, ncol = 2, nrow = 1)
+```
+EM abundance
+
+```{r}
+bd1<-ggplot(soilresp)+
+  geom_density(aes(x=EM_relabund))+
+  theme_minimal()
+bd2<-ggqqplot(soilresp, x = "EM_relabund")
+ggarrange(bd1, bd2, ncol = 2, nrow = 1)
+```
+
+Bulkdensity
+
+```{r}
+bd1<-ggplot(soilresp)+
+  geom_density(aes(x=Bulkdensity))+
+  theme_minimal()
+bd2<-ggqqplot(soilresp, x = "Bulkdensity")
+ggarrange(bd1, bd2, ncol = 2, nrow = 1)
+```
+
+# Fit an SEM for both forest types together.
+
+Keeping Elevation
+
+```{r}
+# looking at other interactions
+mod6 <- lm(AnnualFlux ~ (F_type + SoilMoisture + FineRoots + soilPCA1 + EM_relabund + Temperature + Elevation)^3, 
+            data=soilresp)
+anova(mod6) 
+check_model(mod6)
+
+mod7 <- lm(AnnualFlux ~ ( SoilMoisture + FineRoots + soilPCA1 + EM_relabund + Temperature + Elevation)^3, 
+            data=soilresp)
+anova(mod7) 
+check_model(mod7)
+
+mod7a <- step(mod7)
+anova(mod7a)
+check_model(mod7a)
+```
+lm(formula = AnnualFlux ~ SoilMoisture + FineRoots + soilPCA1 + 
+    EM_relabund + Temperature + Elevation + SoilMoisture:FineRoots + 
+    SoilMoisture:soilPCA1 + SoilMoisture:EM_relabund + SoilMoisture:Temperature + 
+    FineRoots:soilPCA1 + FineRoots:EM_relabund + FineRoots:Temperature + 
+    FineRoots:Elevation + soilPCA1:EM_relabund + soilPCA1:Temperature + 
+    soilPCA1:Elevation + EM_relabund:Temperature + EM_relabund:Elevation + 
+    Temperature:Elevation + SoilMoisture:FineRoots:soilPCA1 + 
+    SoilMoisture:FineRoots:Temperature + SoilMoisture:soilPCA1:EM_relabund + 
+    FineRoots:soilPCA1:EM_relabund + FineRoots:soilPCA1:Temperature + 
+    FineRoots:EM_relabund:Elevation + soilPCA1:EM_relabund:Temperature + 
+    soilPCA1:EM_relabund:Elevation, data = soilresp)
+
+# SEM all
+```{r}
+
+soil.sem<-psem(lm(AnnualFlux ~ SoilMoisture + FineRoots  , data = soilresp),
+               #abiotic factors
+               
+               lm(SoilMoisture ~ Temperature ,
+                  data = soilresp),
+               lm(Temperature ~ Elevation,
+                  data = soilresp),
+               
+               #biotic factors
+               lm(FineRoots ~   EM_relabund     + Temperature,
+                  data = soilresp),
+               lm(EM_relabund ~  SoilMoisture  + Elevation,
+                  data = soilresp),
+               soilresp)
+
+
+#call summary
+summary(soil.sem)
+rsquared(soil.sem)
+anova(soil.sem)
+#check residuals:
+
+
+sim.residuals <- simulateResiduals(soil.sem[[4]])
+plot(sim.residuals)
+
+
+#There still seems to be some heteroscedasitcity in the residuals. get coefficients in table.
+
+
+soil.sem.coefs <- coefs(soil.sem,
+      standardize = "scale",
+      standardize.type = "latent.linear",
+      test.statistic = "F",
+      test.type = "II",
+      intercepts = FALSE)
+soil.sem.coefs
+knitr::kable(soil.sem.coefs)
+
+
+#Call missing paths:
+
+
+dSep(soil.sem, .progressBar = F)
+knitr::kable(dSep(soil.sem, .progressBar = F))
+
+
+#Write function to plot the SEM:
+
+
+plot.psem <- function(x, return=FALSE,
+                      node_attrs = data.frame(shape = "rectangle", color = "black",
+                                              fillcolor = "#40663F",
+                                              height=0.3, width=0.8, margin = 0.4),
+                      edge_attrs = data.frame(style = "solid", color = "black"),
+                      ns_dashed = T, alpha=0.05,
+                      show = "std", digits = 4, 
+                      scale = 'std', dir_col=F, sign_level=T,
+                      add_edge_label_spaces = TRUE, ...
+){
+  
+  #get the coefficients table
+  ctab <- coefs(x)
+  ctab$Response <- as.character(ctab$Response)
+  ctab$Predictor <- as.character(ctab$Predictor)
+  colnames(ctab)[9]<-"sign"
+  
+  
+  #make a nodes DF
+  unique_nodes <- unique(c(ctab$Response, ctab$Predictor))
+  nodes <- create_node_df(n = length(unique_nodes),
+                          nodes = unique_nodes,
+                          type = "lower",
+                          label = unique_nodes)
+  nodes <- cbind(nodes, node_attrs)
+  nodes[] <- lapply(nodes, as.character)
+  nodes$id <- as.numeric(nodes$id)
+  
+  #make an edges DF
+  edges <- create_edge_df(
+    from = match(ctab$Predictor, unique_nodes),
+    to = match(ctab$Response, unique_nodes))
+  
+  edges <- data.frame(edges, edge_attrs)
+  edges[] <- lapply(edges, as.character)
+  edges$id <- as.numeric(edges$id)
+  edges$from <- as.numeric(edges$from)
+  edges$to <- as.numeric(edges$to)
+  if(ns_dashed) edges$style[which(ctab$P.Value>alpha)] <- "dashed"
+  if(show == "std") edges$label = round(as.numeric(ctab$Std.Estimate), digits = 2)
+  if(show == "unstd") edges$label = round(as.numeric(ctab$Estimate), digits = 2)
+  if(add_edge_label_spaces) edges$label = paste0(" ", edges$label, " ")
+  if(sign_level) edges$taillabel <- as.character(ctab$sign)
+  if(scale == "std") edges$penwidth = (1+abs(as.numeric(ctab$Std.Estimate)))^2
+  if(scale == "unstd") edges$penwidth = (1+abs(as.numeric(ctab$Estimate)))^2
+  if(dir_col) edges$color[which(ctab$Std.Estimate<0)] <- "blue1"
+  
+  
+  #turn into a graph
+  sem_graph <- create_graph(nodes, edges, directed=TRUE)
+  
+  if(return) return(sem_graph)
+  
+  render_graph(sem_graph, ...)}
+
+
+#Plot the SEM.
+
+
+SEMallplot <- plot.psem(soil.sem, dir_col = T)
+SEMallplot
+
+
+```
+
+# SEM old
+```{r}
+
+soil.sem<-psem(lm(AnnualFlux ~ FineRoots + SoilMoisture + F_type,
+                  data = soilresp),
+               lm(FineRoots ~  soilPCA1 + F_type,
+                  data = soilresp),
+               lm(SoilMoisture ~ F_type + Temperature + Elevation,
+                  data = soilresp),
+               lm(BA_EM ~ soilPCA1 + F_type + SoilMoisture,
+                  data = soilresp),
+               lm(soilPCA1 ~ SoilMoisture + Elevation, 
+                  data=soilresp), 
+               soilresp)
+
+summary(soil.sem)
+
+#Call Coefficients in nice table:
+
+```{r}
+knitr::kable(coefs(soil.sem,
+      standardize = "scale",
+      standardize.type = "latent.linear",
+      test.statistic = "F",
+      test.type = "II",
+      intercepts = FALSE))
+```
+
+Simulate and plot residuals to assess model fit.
+
+```{r}
+simres <- simulateResiduals(soil.sem[[4]])
+plot(simres)
+```
+
+Residuals look weird. Might be due to unequal variances between forest
+types.
+
+## SEM without Forest type
+
+(ignoring forest type, so based on abiotic and biotic variables only) Fit different
+SEM based on soil.sem without forest type
+
+```{r SEMall}
+
+resp.sem<-psem(lm(AnnualFlux ~ FineRoots + SoilMoisture  ,
+                      data = soilresp),
+                   lm(FineRoots ~   EM_relabund + SoilMoisture + Temperature ,
+                      data = soilresp),
+                   lm(SoilMoisture ~ Temperature ,
+                      data = soilresp),
+                   lm(Temperature ~ Elevation ,
+                      data = soilresp),
+                   lm(EM_relabund ~  Elevation +  SoilMoisture  + Temperature,
+                      data = soilresp),
+                   soilresp)
+
+#call summary
+summary(resp.sem)
+rsquared(resp.sem)
+anova(resp.sem)
+
+```
+
+check residuals:
+
+```{r}
+sim.residuals <- simulateResiduals(resp.sem[[4]])
+plot(sim.residuals)
+```
+
+There still seems to be some heteroscedasitcity in the residuals. get
+coefficients in table.
+
+```{r SEMallcoefstable, results='asis'}
+coefs(resp.sem,
+      standardize = "scale",
+      standardize.type = "latent.linear",
+      test.statistic = "F",
+      test.type = "II",
+      intercepts = FALSE)
+
+knitr::kable(coefs(resp.sem,
+      standardize = "scale",
+      standardize.type = "latent.linear",
+      test.statistic = "F",
+      test.type = "II",
+      intercepts = FALSE))
+```
+
+Call missing paths:
+
+```{r SEMallcoeftable, results='asis'}
+dSep(resp.sem, .progressBar = F)
+knitr::kable(dSep(resp.sem, .progressBar = F))
+```
+
+Write function to plot the SEM:
+
+```{r SEMallplotfnc}
+plot.psem <- function(x, return=FALSE,
+                      node_attrs = data.frame(shape = "rectangle", color = "black",
+                                              fillcolor = "#40663F",
+                                              height=0.3, width=0.8, margin = 0.4),
+                      edge_attrs = data.frame(style = "solid", color = "black"),
+                      ns_dashed = T, alpha=0.05,
+                      show = "std", digits = 4, 
+                      scale = 'std', dir_col=F, sign_level=T,
+                      add_edge_label_spaces = TRUE, ...
+){
+  
+  #get the coefficients table
+  ctab <- coefs(x)
+  ctab$Response <- as.character(ctab$Response)
+  ctab$Predictor <- as.character(ctab$Predictor)
+  colnames(ctab)[9]<-"sign"
+  
+  
+  #make a nodes DF
+  unique_nodes <- unique(c(ctab$Response, ctab$Predictor))
+  nodes <- create_node_df(n = length(unique_nodes),
+                          nodes = unique_nodes,
+                          type = "lower",
+                          label = unique_nodes)
+  nodes <- cbind(nodes, node_attrs)
+  nodes[] <- lapply(nodes, as.character)
+  nodes$id <- as.numeric(nodes$id)
+  
+  #make an edges DF
+  edges <- create_edge_df(
+    from = match(ctab$Predictor, unique_nodes),
+    to = match(ctab$Response, unique_nodes))
+  
+  edges <- data.frame(edges, edge_attrs)
+  edges[] <- lapply(edges, as.character)
+  edges$id <- as.numeric(edges$id)
+  edges$from <- as.numeric(edges$from)
+  edges$to <- as.numeric(edges$to)
+  if(ns_dashed) edges$style[which(ctab$P.Value>alpha)] <- "dashed"
+  if(show == "std") edges$label = round(as.numeric(ctab$Std.Estimate), digits = 2)
+  if(show == "unstd") edges$label = round(as.numeric(ctab$Estimate), digits = 2)
+  if(add_edge_label_spaces) edges$label = paste0(" ", edges$label, " ")
+  if(sign_level) edges$taillabel <- as.character(ctab$sign)
+  if(scale == "std") edges$penwidth = (1+abs(as.numeric(ctab$Std.Estimate)))^2
+  if(scale == "unstd") edges$penwidth = (1+abs(as.numeric(ctab$Estimate)))^2
+  if(dir_col) edges$color[which(ctab$Std.Estimate<0)] <- "blue1"
+  
+  
+  #turn into a graph
+  sem_graph <- create_graph(nodes, edges, directed=TRUE)
+  
+  if(return) return(sem_graph)
+  
+  render_graph(sem_graph, ...)}
+```
+
+Plot the SEM.
+
+```{r SEMallplot}
+SEMallplot <- plot.psem(resp.sem, dir_col = T)
+SEMallplot
+
+```
+
+# Separate the dataset by forest type.
+
+```{r}
+soilresp1<-soilresp%>%filter(F_type=="Primary")
+soilresp2<-soilresp%>%filter(F_type=="Secondary")
+```
+
+## SEM for Primary forest.
+
+```{r SEMog}
+og.sem<-psem(lm(AnnualFlux ~ SoilMoisture   , data = soilresp1),
+               #abiotic factors
+               
+               lm(SoilMoisture ~ FineRoots,
+                  data = soilresp1),
+               
+               
+               #biotic factors
+               lm(FineRoots ~   EM_relabund     + Temperature,
+                  data = soilresp1),
+               lm(EM_relabund ~   Elevation + SoilMoisture,
+                  data = soilresp1),
+               soilresp1)
+
+#call summary
+summary(og.sem)
+rsquared(og.sem)
+anova(og.sem)
+sim.residuals1 <- simulateResiduals(og.sem[[4]])
+plot(sim.residuals1)
+
+plot.psem(og.sem, dir_col = T)
+
+summary(lm(AnnualFlux ~ SoilMoisture   , data = soilresp1))
+```
+
+Check the model fit with the simulated residuals.
+
+```{r SEMogResid}
+resp.sem1<-psem(lm(AnnualFlux ~ FineRoots + SoilMoisture,
+                      data = soilresp1),
+                   lm(FineRoots ~   EM_relabund + SoilMoisture + Temperature ,
+                      data = soilresp1),
+                   lm(SoilMoisture ~   EM_relabund + Elevation,
+                      data = soilresp1),
+                   lm(EM_relabund ~   Elevation ,
+                      data = soilresp1),
+                   soilresp1)
+
+
+#call summary
+summary(resp.sem1)
+sim.residuals1 <- simulateResiduals(resp.sem1[[4]])
+plot(sim.residuals1)
+```
+
+The fit looks good! Get coefficient tables
+
+```{r SEMogCoef}
+coefs(resp.sem1,
+      standardize = "scale",
+      standardize.type = "latent.linear",
+      test.statistic = "F",
+      test.type = "II",
+      intercepts = FALSE)
+
+knitr::kable(coefs(resp.sem1,
+      standardize = "scale",
+      standardize.type = "latent.linear",
+      test.statistic = "F",
+      test.type = "II",
+      intercepts = FALSE))
+```
+
+Call the missing paths.
+
+```{r SEMogmiss, warning=TRUE}
+dSep(resp.sem1, .progressBar = F)
+knitr::kable(dSep(resp.sem1, .progressBar = F))
+```
+
+There is no missing paths in this model. Plot the model with different
+arrow colors for estimate direction.
+
+```{r SEMogplot}
+plot.psem(resp.sem1, dir_col = T)
+
+```
+
+## SEM for Secondary forest
+
+```{r SEMsf}
+resp.sem2<-psem(lm(AnnualFlux ~ Elevation + FineRoots + SoilMoisture  ,
+                      data = soilresp2),
+                   lm(FineRoots ~   AMabun_BA + SoilMoisture + Elevation ,
+                      data = soilresp2),
+                   lm(SoilMoisture ~ Elevation + AMabun_BA ,
+                      data = soilresp2),
+                   lm(Temperature ~ Elevation ,
+                      data = soilresp2),
+                   lm(AMabun_BA ~  Elevation  + Temperature,
+                      data = soilresp2),
+                   soilresp2)
+
+
+#call summary
+summary(resp.sem2)
+summary(lm(AnnualFlux ~ FineRoots  , data = soilresp2))
+```
+
+Check the model fit.
+
+```{r}
+sim.residuals2 <- simulateResiduals(resp.sem2[[4]])
+plot(sim.residuals2)
+```
+
+There seems to be some heterogeneity in the residuals, however, it
+doesn't look too bad. Get the Coefficients in a table:
+
+```{r SEMsfcoefstable}
+coefs(resp.sem2,
+      standardize = "scale",
+      standardize.type = "latent.linear",
+      test.statistic = "F",
+      test.type = "II",
+      intercepts = FALSE)
+
+knitr::kable(coefs(resp.sem2,
+      standardize = "scale",
+      standardize.type = "latent.linear",
+      test.statistic = "F",
+      test.type = "II",
+      intercepts = FALSE))
+```
+
+See if there are any missing paths:
+
+```{r SEMsfmisscoeftable}
+knitr::kable(dSep(resp.sem2, .progressBar = F))
+dSep(resp.sem2, .progressBar = F)
+```
+plot the initial one to compare:
+
+
+Annual Flux doesn't seem to be independent from PCA2. We update the psem
+and check coefficients and missing paths again.
+
+```{r}
+resp.sem2b<-update(resp.sem2, AnnualFlux ~ FineRoots + Temperature )
+```
+
+Coefficients:
+
+```{r}
+coefs(resp.sem2b,
+      standardize = "scale",
+      standardize.type = "latent.linear",
+      test.statistic = "F",
+      test.type = "II",
+      intercepts = FALSE)
+```
+
+Temperature is not a significant predictor for Annual flux. Missing paths:
+
+```{r}
+knitr::kable(dSep(resp.sem2b, .progressBar = F))
+```
+
+Now also soil PCA3 is significant. we update again.
+
+```{r}
+resp.sem2b<-update(resp.sem2b, AnnualFlux ~ FineRoots + SoilMoisture +Elevation )
+
+```
+
+Check coefficients.
+
+```{r}
+coefs(resp.sem2b,
+      standardize = "scale",
+      standardize.type = "latent.linear",
+      test.statistic = "F",
+      test.type = "II",
+      intercepts = FALSE)
+```
+
+soil PCA3 and soilPCA2 is not a significant predictor for Annual flux.
+Missing paths:
+
+```{r}
+knitr::kable(dSep(resp.sem2b, .progressBar = F))
+```
+
+Now soilPCA1 also seems to be a missing predictor, we update again and
+check the model
+
+```{r}
+resp.sem2b<-update(resp.sem2b, AnnualFlux ~ FineRoots + soilPCA2 +soilPCA3 + soilPCA1)
+
+```
+
+Check coefficients.
+
+```{r}
+knitr::kable(coefs(resp.sem2b,
+      standardize = "scale",
+      standardize.type = "latent.linear",
+      test.statistic = "F",
+      test.type = "II",
+      intercepts = FALSE))
+```
+
+The P-values went down for all soilPCA axes, but they still are not a
+significant predictor for Annual flux. Missing paths:
+
+```{r}
+knitr::kable(dSep(resp.sem2b, .progressBar = F))
+```
+
+Now total basal area also comes on as a missing path.
+
+```{r}
+resp.sem2b<-update(resp.sem2b, AnnualFlux ~ FineRoots + soilPCA2 +soilPCA3 + soilPCA1+total_BA)
+
+```
+
+Check coefficients.
+
+```{r}
+knitr::kable(coefs(resp.sem2b,
+      standardize = "scale",
+      standardize.type = "latent.linear",
+      test.statistic = "F",
+      test.type = "II",
+      intercepts = FALSE))
+```
+
+The P-values went down for all soilPCA axes, and total_BA and most of
+them are borderline significant, except soilPCA2. Missing paths:
+
+```{r}
+knitr::kable(dSep(resp.sem2b, .progressBar = F))
+```
+
+There's no more missing paths. checking the model fit again.
+
+```{r}
+sim.residuals2b <- simulateResiduals(resp.sem2b[[4]])
+plot(sim.residuals2b)
+```
+
+It doesn't look very different from the first one. Plot the model, we
+rewrite the function for the color of the boxes.
+
+```{r SEMsfplotfnc}
+plot.psem <- function(x, return=FALSE,
+                      node_attrs = data.frame(shape = "rectangle", color = "black",
+                                              fillcolor = "#D58A60",
+                                              height=0.3, width=0.8, margin = 0.2),
+                      edge_attrs = data.frame(style = "solid", color = "black"),
+                      ns_dashed = T, alpha=0.05,
+                      dir_col=F, sign_level=T,
+                      show = "std", digits = 3, 
+                      scale = 'std',
+                      add_edge_label_spaces = TRUE, ...
+){
+  
+  #get the coefficients table
+  ctab <- coefs(x)
+  ctab$Response <- as.character(ctab$Response)
+  ctab$Predictor <- as.character(ctab$Predictor)
+  colnames(ctab)[9]<-"sign"
+  
+  
+  #make a nodes DF
+  unique_nodes <- unique(c(ctab$Response, ctab$Predictor))
+  nodes <- create_node_df(n = length(unique_nodes),
+                          nodes = unique_nodes,
+                          type = "lower",
+                          label = unique_nodes)
+  nodes <- cbind(nodes, node_attrs)
+  nodes[] <- lapply(nodes, as.character)
+  nodes$id <- as.numeric(nodes$id)
+  
+  #make an edges DF
+  edges <- create_edge_df(
+    from = match(ctab$Predictor, unique_nodes),
+    to = match(ctab$Response, unique_nodes))
+  
+  edges <- data.frame(edges, edge_attrs)
+  edges[] <- lapply(edges, as.character)
+  edges$id <- as.numeric(edges$id)
+  edges$from <- as.numeric(edges$from)
+  edges$to <- as.numeric(edges$to)
+  if(ns_dashed) edges$style[which(ctab$P.Value>alpha)] <- "dashed"
+  if(show == "std") edges$label = round(as.numeric(ctab$Std.Estimate), digits = 2)
+  if(show == "unstd") edges$label = round(as.numeric(ctab$Estimate), digits = 2)
+  if(add_edge_label_spaces) edges$label = paste0(" ", edges$label, " ")
+  if(sign_level) edges$taillabel <- as.character(ctab$sign)
+  if(scale == "std") edges$penwidth = (1+abs(as.numeric(ctab$Std.Estimate)))^2
+  if(scale == "unstd") edges$penwidth = (1+abs(as.numeric(ctab$Estimate)))^2
+  if(dir_col) edges$color[which(ctab$Std.Estimate<0)] <- "blue1"
+  
+  #turn into a graph
+  sem_graph <- create_graph(nodes, edges, directed=TRUE)
+  
+  if(return) return(sem_graph)
+  
+  render_graph(sem_graph, ...)}
+
+```
+
+Plot the model again.
+
+```{r}
+plot.psem(resp.sem2b, dir_col = T)
+```
+
+plot the initial one to compare:
+
+```{r SEMsfplot}
+plot.psem(resp.sem2, dir_col = T)
+```
+# Correlation matrix plot 
+
+Select traits to include 
+
+```{r correlogram}
+# corrplots
+#require(GGally)
+names(soilresp)
+# Check correlations (as scatterplots), distribution and print corrleation coefficient 
+p_pairs_all <- ggpairs(soilresp, columns = c(2,12,11,13:14,36,40), ggplot2::aes(colour=F_type),
+                   progress=FALSE,
+                   diag = list(discrete="barDiag", 
+                               continuous = wrap("densityDiag", alpha=0.5 )),
+                   lower = list(continuous = wrap("smooth", alpha = 0.3))) + theme_bw()
+# Change color manually.
+# Loop through each plot changing relevant scales
+for(i in 1:p_pairs_all$nrow) {
+  for(j in 1:p_pairs_all$ncol){
+    p_pairs_all[i,j] <- p_pairs_all[i,j] + 
+        scale_fill_manual(values=c("#40663F", "#D58A60")) +
+        scale_color_manual(values=c("#40663F", "#D58A60"))  
+  }
+}
+p_pairs_all
+
+#OG
+p_pairs1 <- ggpairs(soilresp1, columns = c(12,11,13:14,60,36,40), 
+                   progress=FALSE,
+                   diag = list(discrete="barDiag", 
+                               continuous = wrap("densityDiag", alpha=0.5 )),
+                   lower = list(continuous = wrap("smooth", alpha = 0.3))) + theme_bw()
+
+#secondary
+p_pairs2 <- ggpairs(soilresp2, columns = c(12,11,13:14,60,36,40), 
+                   progress=FALSE,
+                   diag = list(discrete="barDiag", 
+                               continuous = wrap("densityDiag", alpha=0.5 )),
+                   lower = list(continuous = wrap("smooth", alpha = 0.3))) + theme_bw()
+
+#ggsave("p_pairs_all.jpg",width = 12, height = 12, dpi=300)
+```
